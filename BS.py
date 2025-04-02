@@ -18,14 +18,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # 🔑 Token va Admin ID
 TOKEN = "7400356855:AAH16xmEED2fc0NaaQH9XFEJuhqZn-D3nvY"
-ADMIN_ID = 7865739071  # @Mr_Beck07 ning haqiqiy ID'sini bu yerga qo'ying (aniqlash uchun @userinfobot dan foydalaning)
+ADMIN_ID = 7865739071
 ADMIN_USERNAME = "@Mr_Beck07"
 
 # Webhook sozlamalari
 WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"https://bs-bot-production.up.railway.app{WEBHOOK_PATH}"  # Railway URL
+WEBHOOK_URL = f"https://bs-bot-production.up.railway.app{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
-WEBAPP_PORT = int(os.environ.get("PORT", 8080))  # Railway PORT
+WEBAPP_PORT = int(os.environ.get("PORT", 8080))
 
 # 📌 Botni ishga tushirish funksiyasi
 async def initialize_bot():
@@ -76,10 +76,11 @@ cursor.execute("""
     )
 """)
 
-# 📌 Baza haqida kommentariyalar jadvali
+# 📌 Baza haqida kommentariyalar jadvali (user_id qo'shildi)
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS db_comments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
         comment TEXT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -173,7 +174,7 @@ async def process_position(message: Message, state: FSMContext):
         logging.error(f"Foydalanuvchi qo‘shishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Admin yordam (imkoniyatlar ro‘yxati)
+# 🔹 Admin yordam
 @dp.message(Command("help"))
 async def help_command(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -184,12 +185,12 @@ async def help_command(message: Message):
                         "❌ /reject foydalanuvchi_id - Foydalanuvchini rad etish\n"
                         "⛔ /revoke foydalanuvchi_id - Foydalanuvchi ruxsatini bekor qilish\n"
                         "📋 /list_users - Tasdiqlangan foydalanuvchilar ro‘yxati\n"
-                        "📍 /add [kod nom] url - Lokatsiya qo‘shish (oldingi ikkita rasm va qo'shimcha ma'lumotdan so‘ng)\n"
+                        "📍 /add [kod nom] url - Lokatsiya qo‘shish\n"
                         "🗑 /delete kod - Lokatsiya o‘chirish\n"
                         "🌍 /list_locations - Lokatsiyalar ro‘yxati\n"
-                        "🔄 /reset_add - Lokatsiya qo‘shish jarayonini qayta boshlash\n"
-                        "💬 /add_comment komment - Baza haqida kommentariya qo‘shish\n"
-                        "📜 /view_comments - Baza haqidagi kommentariyalarni ko‘rish\n"
+                        "🔄 /reset_add - Lokatsiya qo‘shishni qayta boshlash\n"
+                        "💬 /add_comment komment - Kommentariya qo‘shish\n"
+                        "📜 /view_comments - Kommentariyalarni ko‘rish\n"
                         "ℹ️ /help - Ushbu yordam menyusi",
                         protect_content=True)
 
@@ -201,8 +202,7 @@ async def approve_user(message: Message):
 
     command_parts = message.text.split()
     if len(command_parts) != 2:
-        return await message.reply("❌ Xato! Format: /approve foydalanuvchi_id\nMasalan: /approve 12345",
-                                   protect_content=True)
+        return await message.reply("❌ Xato! Format: /approve foydalanuvchi_id", protect_content=True)
 
     try:
         user_id = int(command_parts[1])
@@ -214,11 +214,8 @@ async def approve_user(message: Message):
         await message.reply(f"✅ Foydalanuvchi (🆔 {user_id}) tasdiqlandi.", protect_content=True)
         await bot.send_message(user_id, "✅ Admin sizga ruxsat berdi. Endi tizimdan foydalanishingiz mumkin!",
                               reply_markup=get_user_keyboard(), protect_content=True)
-    except ValueError:
-        await message.reply("❌ Xato! Foydalanuvchi ID raqam bo‘lishi kerak.\nMasalan: /approve 12345",
-                            protect_content=True)
     except Exception as e:
-        logging.error(f"Foydalanuvchi tasdiqlashda xato: {str(e)}")
+        logging.error(f"Tasdiqlashda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Admin rad etish
@@ -229,8 +226,7 @@ async def reject_user(message: Message):
 
     command_parts = message.text.split()
     if len(command_parts) != 2:
-        return await message.reply("❌ Xato! Format: /reject foydalanuvchi_id\nMasalan: /reject 12345",
-                                   protect_content=True)
+        return await message.reply("❌ Xato! Format: /reject foydalanuvchi_id", protect_content=True)
 
     try:
         user_id = int(command_parts[1])
@@ -240,14 +236,10 @@ async def reject_user(message: Message):
         conn.commit()
 
         await message.reply(f"❌ Foydalanuvchi (🆔 {user_id}) rad etildi.", protect_content=True)
-        await bot.send_message(user_id, "❌ Admin sizning ro‘yxatingizni rad etdi. "
-                                       "Qayta urinib ko‘rish uchun /start ni bosing.",
+        await bot.send_message(user_id, "❌ Admin sizning ro‘yxatingizni rad etdi. Qayta urinib ko‘rish uchun /start ni bosing.",
                               reply_markup=get_user_keyboard(), protect_content=True)
-    except ValueError:
-        await message.reply("❌ Xato! Foydalanuvchi ID raqam bo‘lishi kerak.\nMasalan: /reject 12345",
-                            protect_content=True)
     except Exception as e:
-        logging.error(f"Foydalanuvchi rad etishda xato: {str(e)}")
+        logging.error(f"Rad etishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Admin ruxsatni bekor qilish
@@ -258,8 +250,7 @@ async def revoke_user(message: Message):
 
     command_parts = message.text.split()
     if len(command_parts) != 2:
-        return await message.reply("❌ Xato! Format: /revoke foydalanuvchi_id\nMasalan: /revoke 12345",
-                                   protect_content=True)
+        return await message.reply("❌ Xato! Format: /revoke foydalanuvchi_id", protect_content=True)
 
     try:
         user_id = int(command_parts[1])
@@ -271,14 +262,11 @@ async def revoke_user(message: Message):
         await message.reply(f"⛔ Foydalanuvchi (🆔 {user_id}) ruxsati bekor qilindi.", protect_content=True)
         await bot.send_message(user_id, "⛔ Admin sizning ruxsatingizni bekor qildi. Endi tizimdan foydalana olmaysiz.",
                               reply_markup=get_user_keyboard(), protect_content=True)
-    except ValueError:
-        await message.reply("❌ Xato! Foydalanuvchi ID raqam bo‘lishi kerak.\nMasalan: /revoke 12345",
-                            protect_content=True)
     except Exception as e:
-        logging.error(f"Foydalanuvchi ruxsatini bekor qilishda xato: {str(e)}")
+        logging.error(f"Ruxsatni bekor qilishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Tasdiqlangan foydalanuvchilarni ro‘yxatini ko‘rish
+# 🔹 Tasdiqlangan foydalanuvchilar ro‘yxati
 @dp.message(Command("list_users"))
 async def list_users(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -294,14 +282,13 @@ async def list_users(message: Message):
         response = f"📋 Tasdiqlangan foydalanuvchilar ro‘yxati ({len(users)} ta):\n\n"
         for user in users:
             user_id, full_name, work_place, position = user
-            response += f"🆔 ID: {user_id}\n👤 Familiya va ism: {full_name}\n🏢 Ish joyi: {work_place}\n💼 Lavozim: {position}\n\n"
-
+            response += f"🆔 ID: {user_id}\n👤 {full_name}\n🏢 {work_place}\n💼 {position}\n\n"
         await message.reply(response, protect_content=True)
     except Exception as e:
-        logging.error(f"Foydalanuvchilar ro‘yxatini olishda xato: {str(e)}")
+        logging.error(f"Ro‘yxatni olishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Lokatsiyalar ro‘yxatini ko‘rish
+# 🔹 Lokatsiyalar ro‘yxati (tartib raqamlari qo'shildi)
 @dp.message(Command("list_locations"))
 async def list_locations(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -315,20 +302,19 @@ async def list_locations(message: Message):
             return await message.reply("🌍 Hozircha lokatsiyalar mavjud emas.", protect_content=True)
 
         response = f"🌍 Lokatsiyalar ro‘yxati ({len(locations)} ta):\n\n"
-        for loc in locations:
+        for i, loc in enumerate(locations, 1):
             code, name, lat, lon, additional_info = loc
             map_url = f"http://maps.google.com/maps?q={lat},{lon}&z=16"
-            response += f"📍 Kod: {code}\n🏞 Nom: {name}\n🌐 Koordinatalar: {lat}, {lon}\n"
+            response += f"{i}. 📍 Kod: {code}\n🏞 Nom: {name}\n🌐 Koordinatalar: {lat}, {lon}\n"
             if additional_info:
-                response += f"📝 Qo'shimcha ma'lumot: {additional_info}\n"
+                response += f"📝 Qo'shimcha: {additional_info}\n"
             response += f"<a href='{map_url}'>Xaritada</a>\n\n"
-
         await message.reply(response, protect_content=True, disable_web_page_preview=True)
     except Exception as e:
         logging.error(f"Lokatsiyalarni olishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Baza haqida kommentariya qo‘shish
+# 🔹 Kommentariya qo‘shish
 @dp.message(Command("add_comment"))
 async def add_comment(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -336,42 +322,46 @@ async def add_comment(message: Message):
 
     parts = message.text.split(" ", 1)
     if len(parts) < 2:
-        return await message.reply("❌ Xato! Format: /add_comment komment\nMasalan: /add_comment Bu baza 2025-yilda yangilandi",
-                                   protect_content=True)
+        return await message.reply("❌ Xato! Format: /add_comment komment", protect_content=True)
 
     try:
         comment = parts[1].strip()
-        cursor.execute("INSERT INTO db_comments (comment) VALUES (?)", (comment,))
+        cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)", (ADMIN_ID, comment))
         conn.commit()
         await message.reply(f"💬 Kommentariya qo‘shildi: {comment}", protect_content=True)
     except Exception as e:
         logging.error(f"Kommentariya qo‘shishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Baza haqidagi kommentariyalarni ko‘rish
+# 🔹 Kommentariyalarni ko‘rish (foydalanuvchi ma'lumotlari qo'shildi)
 @dp.message(Command("view_comments"))
 async def view_comments(message: Message):
     if message.from_user.id != ADMIN_ID:
         return await message.reply("❌ Sizda ushbu buyruqni bajarish huquqi yo‘q.", protect_content=True)
 
     try:
-        cursor.execute("SELECT id, comment, timestamp FROM db_comments ORDER BY timestamp DESC")
+        cursor.execute("""
+            SELECT dc.id, dc.user_id, dc.comment, dc.timestamp, u.full_name 
+            FROM db_comments dc 
+            LEFT JOIN users u ON dc.user_id = u.user_id 
+            ORDER BY dc.timestamp DESC
+        """)
         comments = cursor.fetchall()
 
         if not comments:
-            return await message.reply("📜 Hozircha baza haqida kommentariyalar mavjud emas.", protect_content=True)
+            return await message.reply("📜 Hozircha kommentariyalar mavjud emas.", protect_content=True)
 
-        response = f"📜 Baza haqidagi kommentariyalar ({len(comments)} ta):\n\n"
+        response = f"📜 Kommentariyalar ({len(comments)} ta):\n\n"
         for comment in comments:
-            comment_id, text, timestamp = comment
-            response += f"🆔 ID: {comment_id}\n💬 Komment: {text}\n⏰ Vaqt: {timestamp}\n\n"
-
+            comment_id, user_id, text, timestamp, full_name = comment
+            full_name = full_name or "Noma'lum"
+            response += f"🆔 ID: {comment_id}\n👤 {full_name} (ID: {user_id})\n💬 {text}\n⏰ {timestamp}\n\n"
         await message.reply(response, protect_content=True)
     except Exception as e:
         logging.error(f"Kommentariyalarni ko‘rishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Admin lokatsiya qo‘shish jarayonini qayta boshlash
+# 🔹 Lokatsiya qo‘shish jarayonini qayta boshlash
 @dp.message(Command("reset_add"))
 async def reset_add(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
@@ -382,37 +372,36 @@ async def reset_add(message: Message, state: FSMContext):
                         protect_content=True)
     await state.set_state(AddLocationState.waiting_for_first_photo)
 
-# 🔹 Admin birinchi rasmni yuborishi
+# 🔹 Birinchi rasm
 @dp.message(lambda message: message.from_user.id == ADMIN_ID and message.photo, AddLocationState.waiting_for_first_photo)
 async def process_first_photo(message: Message, state: FSMContext):
     photo1 = message.photo[-1].file_id
     await state.update_data(photo1=photo1)
-    await message.reply("📸 Birinchi rasm qabul qilindi. Endi ikkinchi rasmni yuboring.",
+    await message.reply("📸 Birinchi rasm qabul qilindi. Ikkichi rasmni yuboring.",
                         protect_content=True)
     await state.set_state(AddLocationState.waiting_for_second_photo)
 
-# 🔹 Admin ikkinchi rasmni yuborishi
+# 🔹 Ikkichi rasm
 @dp.message(lambda message: message.from_user.id == ADMIN_ID and message.photo, AddLocationState.waiting_for_second_photo)
 async def process_second_photo(message: Message, state: FSMContext):
     photo2 = message.photo[-1].file_id
     await state.update_data(photo2=photo2)
-    await message.reply("📸 Ikkita rasm qabul qilindi. Endi qo'shimcha ma'lumotlarni yuboring (agar kerak bo'lmasa, 'yo'q' deb yozing):",
+    await message.reply("📸 Ikkita rasm qabul qilindi. Qo'shimcha ma'lumot yuboring (agar kerak bo'lmasa, 'yo'q' deb yozing):",
                         protect_content=True)
     await state.set_state(AddLocationState.waiting_for_additional_info)
 
-# 🔹 Admin qo'shimcha ma'lumotlarni yuborishi
+# 🔹 Qo'shimcha ma'lumot
 @dp.message(AddLocationState.waiting_for_additional_info)
 async def process_additional_info(message: Message, state: FSMContext):
     additional_info = message.text.strip()
     if additional_info.lower() == "yo'q":
         additional_info = None
     await state.update_data(additional_info=additional_info)
-    await message.reply("📝 Qo'shimcha ma'lumotlar qabul qilindi. Endi /add [kod nom] url yuboring.\n"
-                        "Masalan: /add [3700 Aktash] http://maps.google.com/maps?q=39.919719,65.929442",
+    await message.reply("📝 Ma'lumot qabul qilindi. /add [kod nom] url yuboring.\nMasalan: /add [3700 Aktash] http://maps.google.com/maps?q=39.919719,65.929442",
                         protect_content=True)
     await state.set_state(AddLocationState.waiting_for_command)
 
-# 🔹 Admin lokatsiya qo‘shishi (/add buyrug‘i)
+# 🔹 Lokatsiya qo‘shish
 @dp.message(Command("add"))
 async def add_location(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
@@ -420,8 +409,7 @@ async def add_location(message: Message, state: FSMContext):
 
     current_state = await state.get_state()
     if current_state != AddLocationState.waiting_for_command.state:
-        await message.reply("❌ Oldin ikkita rasm va qo'shimcha ma'lumotlarni yuboring! Birinchi rasmni yuborishdan boshlang.\n"
-                            "Agar jarayonni qayta boshlamoqchi bo‘lsangiz, /reset_add buyrug‘ini ishlatishingiz mumkin.",
+        await message.reply("❌ Oldin ikkita rasm va ma'lumot yuboring! /reset_add bilan qayta boshlashingiz mumkin.",
                             protect_content=True)
         await state.set_state(AddLocationState.waiting_for_first_photo)
         return
@@ -442,8 +430,7 @@ async def add_location(message: Message, state: FSMContext):
         additional_info = user_data.get("additional_info")
 
         if not photo1 or not photo2:
-            await message.reply("❌ Ikkita rasm yuborilmadi! Birinchi rasmni yuborishdan boshlang.\n"
-                                "Agar jarayonni qayta boshlamoqchi bo‘lsangiz, /reset_add buyrug‘ini ishlatishingiz mumkin.",
+            await message.reply("❌ Ikkita rasm yuborilmadi! /reset_add bilan qayta boshlang.",
                                 protect_content=True)
             await state.set_state(AddLocationState.waiting_for_first_photo)
             return
@@ -459,7 +446,7 @@ async def add_location(message: Message, state: FSMContext):
         logging.error(f"Lokatsiya qo‘shishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Admin lokatsiya o‘chirish
+# 🔹 Lokatsiya o‘chirish
 @dp.message(Command("delete"))
 async def delete_location(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -475,10 +462,10 @@ async def delete_location(message: Message):
         conn.commit()
         await message.reply(f"🗑 [{code}] kodli joy o‘chirildi.", protect_content=True)
     except Exception as e:
-        logging.error(f"Lokatsiya o‘chirishda xato: {str(e)}")
+        logging.error(f"O‘chirishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Foydalanuvchi lokatsiya so‘rashi
+# 🔹 Foydalanuvchi lokatsiya so‘rashi (kommentariya qo'shildi)
 @dp.message()
 async def get_location(message: Message):
     if not message.text or message.text.startswith("/"):
@@ -489,7 +476,7 @@ async def get_location(message: Message):
     result = cursor.fetchone()
 
     if not result or result[0] == 0:
-        return await message.reply("❌ Siz admin ruxsatini olmagansiz. ⏳ Iltimos, admin tasdiqini kuting.",
+        return await message.reply("❌ Siz admin ruxsatini olmagansiz. ⏳ Tasdiqni kuting.",
                                    reply_markup=get_user_keyboard(), protect_content=True)
 
     try:
@@ -502,7 +489,7 @@ async def get_location(message: Message):
             map_url = f"http://maps.google.com/maps?q={lat},{lon}&z=16"
             caption = f"📍 [{code} {name}]\n🌍 <a href='{map_url}'>Google xaritada ochish</a>"
             if additional_info:
-                caption += f"\n📝 Qo'shimcha ma'lumot: {additional_info}"
+                caption += f"\n📝 Qo'shimcha: {additional_info}"
 
             media = [
                 types.InputMediaPhoto(media=photo1, caption=caption, parse_mode="HTML"),
@@ -511,32 +498,36 @@ async def get_location(message: Message):
             await bot.send_media_group(chat_id=user_id, media=media, protect_content=True)
             await message.reply("Yuqoridagi rasmlar bilan lokatsiya yuborildi.", reply_markup=get_user_keyboard(),
                                 protect_content=True)
+
+            # Avtomatik kommentariya qo'shish
+            comment = f"Foydalanuvchi {code} kodli lokatsiyani oldi va tekshirdi"
+            cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)", (user_id, comment))
+            conn.commit()
         else:
-            await message.reply("❌ Bunday bazaviy stansiya topilmadi yoki hali bazaga qo‘shilmagan!",
+            await message.reply("❌ Bunday kod topilmadi yoki hali qo‘shilmagan!",
                                 reply_markup=get_user_keyboard(), protect_content=True)
     except Exception as e:
-        logging.error(f"Lokatsiya so‘rovida xato: {str(e)}")
+        logging.error(f"So‘rovda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Foydalanuvchi rasm yuborsa (admin bo‘lmagan foydalanuvchilar uchun)
+# 🔹 Foydalanuvchi rasm yuborsa
 @dp.message(lambda message: message.from_user.id != ADMIN_ID and message.photo)
 async def handle_user_photo(message: Message):
     await message.reply("❌ Faqat lokatsiya kodi yuborishingiz mumkin (masalan, 3700). Rasm yuborish mumkin emas!",
                         reply_markup=get_user_keyboard(), protect_content=True)
 
-# 🔹 Inline tugmalarga javob
+# 🔹 Inline tugmalar
 @dp.callback_query()
 async def process_callback(callback: types.CallbackQuery):
     if callback.data == "help":
-        await callback.message.edit_text("ℹ️ Botdan foydalanish: Lokatsiya kodini yuboring (masalan, 3700). "
-                                         "Admin tasdiqini kutayotgan bo‘lsangiz, kuting.",
+        await callback.message.edit_text("ℹ️ Botdan foydalanish: Lokatsiya kodini yuboring (masalan, 3700).",
                                          reply_markup=get_user_keyboard(), protect_content=True)
     elif callback.data == "contact":
-        await callback.message.edit_text(f"📞 Aloqa: Admin bilan bog‘lanish uchun {ADMIN_USERNAME} ga yozing.",
+        await callback.message.edit_text(f"📞 Aloqa: {ADMIN_USERNAME} ga yozing.",
                                          reply_markup=get_user_keyboard(), protect_content=True)
     await callback.answer()
 
-# 📌 Webhookni sozlash va botni ishga tushirish
+# 📌 Webhook sozlash
 async def on_startup():
     try:
         await bot.set_webhook(WEBHOOK_URL)
@@ -550,7 +541,7 @@ async def on_shutdown():
         await bot.session.close()
         logging.info("Bot shutdown completed.")
     except Exception as e:
-        logging.error(f"Botni o‘chirishda xato: {str(e)}")
+        logging.error(f"O‘chirishda xato: {str(e)}")
 
 # 📌 Botni ishga tushirish
 async def main():
@@ -573,7 +564,7 @@ async def main():
         logging.info("Starting webhook server...")
         await web._run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
     except Exception as e:
-        logging.error(f"Botni ishga tushirishda xato: {str(e)}")
+        logging.error(f"Ishga tushirishda xato: {str(e)}")
         raise
 
 if __name__ == "__main__":

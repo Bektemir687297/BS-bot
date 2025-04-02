@@ -23,8 +23,8 @@ ADMIN_USERNAME = "@Mr_Beck07"  # Admin username
 
 # Webhook sozlamalari
 WEBHOOK_PATH = "/webhook"
-# Railway URL'ingizni bu yerga qo'ying (masalan, https://bs-bot-production.up.railway.app)
-WEBHOOK_URL = f"https://bs-bot.up.railway.app/webhook{WEBHOOK_PATH}"
+# Webhook URL'ni yangilash
+WEBHOOK_URL = f"https://bs-bot-production.up.railway.app/webhook"
 WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.environ.get("PORT", 8080))  # Railway PORT ni o'qiydi
 

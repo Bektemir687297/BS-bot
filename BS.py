@@ -109,7 +109,7 @@ class AddLocationState(StatesGroup):
     waiting_for_additional_info = State()
     waiting_for_command = State()
 
-# 🎨 Inline tugmalar (Chiroyli ikonkalardan foydalanamiz)
+# 🎨 Inline tugmalar
 def get_user_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="ℹ️ Yordam", callback_data="help"),
@@ -440,7 +440,7 @@ async def process_callback(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.reply("❓ Nima maqsadda bordiz va nima o'zgartirdingiz? Javobingizni yozing:",
                                     reply_markup=get_user_keyboard(), protect_content=True)
         await state.set_state(UserCommentState.waiting_for_comment)
-        await state.update_data(location_code=location_code)
+        await state.update_data(location_code=location_code)  # Har safar location_code ni yangilash
 
     elif callback.data == "search_location":
         await callback.message.reply("🔍 Yangi lokatsiya kodini yuboring (masalan, 3700):", reply_markup=get_user_keyboard(), protect_content=True)

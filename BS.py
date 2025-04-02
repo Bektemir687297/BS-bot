@@ -51,7 +51,7 @@ dp = Dispatcher(storage=storage)
 conn = sqlite3.connect("database.db", check_same_thread=False)  # Thread-safe qilish uchun
 cursor = conn.cursor()
 
-# 📌 Jadval yaratish funksiyasi (bir marta ishlatish uchun)
+# 📌 Jadval yaratish funksiyasi
 def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -430,38 +430,63 @@ async def process_callback(callback: types.CallbackQuery, state: FSMContext):
     if not result or result[0] == 0:
         await callback.message.reply("❌ Admin ruxsatini olmagansiz!", reply_markup=get_user_keyboard(), protect_content=True)
         return await callback.answer()
+
     if callback.data == "write_comment":
         user_data = await state.get_data()
-        if not user_data.get("location_code"):
+        location_code = user_data.get("location_code")
+        if not location_code:
             await callback.message.reply("❌ Avval lokatsiya kodini yuboring!", reply_markup=get_user_keyboard(), protect_content=True)
             return await callback.answer()
-        await callback.message.reply("❓ Nima maqsadda bordiz va nima o'zgartirdingiz?", reply_markup=get_user_keyboard(), protect_content=True)
+        await callback.message.reply("❓ Nima maqsadda bordiz va nima o'zgartirdingiz? Javobingizni yozing:",
+                                    reply_markup=get_user_keyboard(), protect_content=True)
         await state.set_state(UserCommentState.waiting_for_comment)
+        await state.update_data(location_code=location_code)  # Kodni holatda saqlash
+
     elif callback.data == "search_location":
         await callback.message.reply("🔍 Yangi lokatsiya kodini yuboring (masalan, 3700):", reply_markup=get_user_keyboard(), protect_content=True)
         await state.set_state(UserSearchLocationState.waiting_for_location_code)
+
     elif callback.data == "help":
         await callback.message.edit_text("ℹ️ Lokatsiya kodini yuboring (masalan, 3700).", reply_markup=get_user_keyboard(), protect_content=True)
+
     elif callback.data == "contact":
         await callback.message.edit_text(f"📞 {ADMIN_USERNAME} ga yozing.", reply_markup=get_user_keyboard(), protect_content=True)
+
     await callback.answer()
 
+# 🔹 Foydalanuvchi kommentariyasini qabul qilish
 @dp.message(UserCommentState.waiting_for_comment)
 async def process_user_comment(message: Message, state: FSMContext):
     user_id = message.from_user.id
     comment_text = message.text.strip()
     user_data = await state.get_data()
     location_code = user_data.get("location_code")
-    cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)", (user_id, f"[{location_code}] bo'yicha: {comment_text}"))
-    conn.commit()
-    await message.reply("✅ Javobingiz saqlandi. Rahmat!", reply_markup=get_user_keyboard(), protect_content=True)
+
+    if not location_code:
+        await message.reply("❌ Lokatsiya kodi topilmadi. Iltimos, qaytadan lokatsiya kodini yuboring.",
+                            reply_markup=get_user_keyboard(), protect_content=True)
+        await state.clear()
+        return
+
+    try:
+        cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)",
+                       (user_id, f"[{location_code}] bo'yicha: {comment_text}"))
+        conn.commit()
+        await message.reply("✅ Sizning javobingiz saqlandi. Rahmat!",
+                            reply_markup=get_user_keyboard(), protect_content=True)
+    except Exception as e:
+        logging.error(f"Foydalanuvchi kommentariyasini saqlashda xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
+
     await state.clear()
 
+# 🔹 Foydalanuvchi yangi lokatsiya kodi yuborishi
 @dp.message(UserSearchLocationState.waiting_for_location_code)
 async def process_search_location(message: Message, state: FSMContext):
     await get_location(message, state)  # Takrorlanmaslik uchun umumiy funksiyadan foydalanamiz
     await state.clear()
 
+# 🔹 Foydalanuvchi rasm yuborsa
 @dp.message(lambda message: message.from_user.id != ADMIN_ID and message.photo)
 async def handle_user_photo(message: Message):
     await message.reply("❌ Faqat lokatsiya kodi yuborishingiz mumkin (masalan, 3700)!", reply_markup=get_user_keyboard(), protect_content=True)

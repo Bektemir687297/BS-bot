@@ -476,7 +476,7 @@ async def delete_location(message: Message):
         logging.error(f"O‘chirishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Foydalanuvchi lokatsiya so‘rashi va kommentariya qo‘shish
+# 🔹 Foydalanuvchi lokatsiya so‘rashi va kommentariya qo‘shish (Tuzatilgan)
 @dp.message()
 async def get_location(message: Message, state: FSMContext):
     if not message.text or message.text.startswith("/"):
@@ -491,7 +491,14 @@ async def get_location(message: Message, state: FSMContext):
                                    reply_markup=get_user_keyboard(), protect_content=True)
 
     try:
+        # Kodni tozalash va faqat raqamlarni olish
         code = message.text.strip()
+        # Agar kod faqat raqamlardan iborat bo‘lishini ta'minlash
+        if not code.isdigit():
+            return await message.reply("❌ Kod faqat raqamlardan iborat bo‘lishi kerak (masalan, 3700)!",
+                                       reply_markup=get_user_keyboard(), protect_content=True)
+
+        # Lokatsiyani qidirish
         cursor.execute("SELECT name, latitude, longitude, photo1, photo2, additional_info FROM locations WHERE code = ?", (code,))
         result = cursor.fetchone()
 
@@ -516,11 +523,11 @@ async def get_location(message: Message, state: FSMContext):
             cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)", (user_id, comment))
             conn.commit()
 
-            # Foydalanuvchi javobini kutish uchun holatni o rnatamiz
+            # Foydalanuvchi javobini kutish uchun holatni o'rnatamiz
             await state.set_state(UserCommentState.waiting_for_comment)
             await state.update_data(location_code=code)
         else:
-            await message.reply("❌ Bunday kod topilmadi yoki hali qo‘shilmagan!",
+            await message.reply("❌ Bunday kod topilmadi yoki hali qo‘shilmagan! Admin bilan bog‘laning.",
                                 reply_markup=get_user_keyboard(), protect_content=True)
     except Exception as e:
         logging.error(f"So‘rovda xato: {str(e)}")

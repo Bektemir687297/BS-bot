@@ -65,7 +65,7 @@ cursor.execute("""
 # 📌 Lokatsiyalar jadvali
 cursor.execute("DROP TABLE IF EXISTS locations")
 cursor.execute("""
-    CREATE TABLE locations (
+    CREATE TABLE IF NOT EXISTS locations (
         code TEXT PRIMARY KEY,
         name TEXT,
         latitude REAL,
@@ -80,18 +80,11 @@ cursor.execute("""
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS db_comments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
         comment TEXT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )
 """)
-
-# Check if user_id column exists in db_comments, and add it if it doesn't
-cursor.execute("PRAGMA table_info(db_comments)")
-columns = [col[1] for col in cursor.fetchall()]
-if 'user_id' not in columns:
-    cursor.execute("ALTER TABLE db_comments ADD COLUMN user_id INTEGER")
-    logging.info("Added user_id column to db_comments table.")
-
 conn.commit()
 
 # 🔹 Foydalanuvchi ma'lumotlarini so‘rash uchun holatlar
@@ -99,6 +92,10 @@ class UserRegistration(StatesGroup):
     full_name = State()
     work_place = State()
     position = State()
+
+# 🔹 Foydalanuvchi kommentariyasini so‘rash uchun holat
+class UserCommentState(StatesGroup):
+    waiting_for_comment = State()
 
 # 🔹 Admin lokatsiya qo‘shish uchun holatlar
 class AddLocationState(StatesGroup):
@@ -295,7 +292,7 @@ async def list_users(message: Message):
         logging.error(f"Ro‘yxatni olishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Lokatsiyalar ro‘yxati (tartib raqamlari qo'shildi)
+# 🔹 Lokatsiyalar ro‘yxati
 @dp.message(Command("list_locations"))
 async def list_locations(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -321,7 +318,7 @@ async def list_locations(message: Message):
         logging.error(f"Lokatsiyalarni olishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Kommentariya qo‘shish
+# 🔹 Kommentariya qo‘shish (Admin uchun)
 @dp.message(Command("add_comment"))
 async def add_comment(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -340,7 +337,7 @@ async def add_comment(message: Message):
         logging.error(f"Kommentariya qo‘shishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Kommentariyalarni ko‘rish (foydalanuvchi ma'lumotlari qo'shildi)
+# 🔹 Kommentariyalarni ko‘rish
 @dp.message(Command("view_comments"))
 async def view_comments(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -404,7 +401,7 @@ async def process_additional_info(message: Message, state: FSMContext):
     if additional_info.lower() == "yo'q":
         additional_info = None
     await state.update_data(additional_info=additional_info)
-    await message.reply("📝 Ma'lumot  yuboring.\nMasalan: /add [3700 Aktash] http://maps.google.com/maps?q=39.919719,65.929442",
+    await message.reply("📝 Ma'lumot qabul qilindi. /add [kod nom] url yuboring.\nMasalan: /add [3700 Aktash] http://maps.google.com/maps?q=39.919719,65.929442",
                         protect_content=True)
     await state.set_state(AddLocationState.waiting_for_command)
 
@@ -472,9 +469,9 @@ async def delete_location(message: Message):
         logging.error(f"O‘chirishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Foydalanuvchi lokatsiya so‘rashi (kommentariya qo'shildi)
+# 🔹 Foydalanuvchi lokatsiya so‘rashi va kommentariya qo‘shish
 @dp.message()
-async def get_location(message: Message):
+async def get_location(message: Message, state: FSMContext):
     if not message.text or message.text.startswith("/"):
         return
 
@@ -503,19 +500,45 @@ async def get_location(message: Message):
                 types.InputMediaPhoto(media=photo2)
             ]
             await bot.send_media_group(chat_id=user_id, media=media, protect_content=True)
-            await message.reply("Yuqoridagi rasmlar bilan lokatsiya yuborildi.", reply_markup=get_user_keyboard(),
-                                protect_content=True)
+            await message.reply("Yuqoridagi rasmlar bilan lokatsiya yuborildi.\n\n"
+                               "❓ Nima maqsadda bordiz va nima o'zgartirdingiz? Javobingizni yozing:",
+                               reply_markup=get_user_keyboard(), protect_content=True)
 
             # Avtomatik kommentariya qo'shish
             comment = f"Foydalanuvchi {code} kodli lokatsiyani oldi va tekshirdi"
             cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)", (user_id, comment))
             conn.commit()
+
+            # Foydalanuvchi javobini kutish uchun holatni o'rnatamiz
+            await state.set_state(UserCommentState.waiting_for_comment)
+            await state.update_data(location_code=code)
         else:
             await message.reply("❌ Bunday kod topilmadi yoki hali qo‘shilmagan!",
                                 reply_markup=get_user_keyboard(), protect_content=True)
     except Exception as e:
         logging.error(f"So‘rovda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
+
+# 🔹 Foydalanuvchi kommentariyasini qabul qilish
+@dp.message(UserCommentState.waiting_for_comment)
+async def process_user_comment(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    comment_text = message.text.strip()
+    user_data = await state.get_data()
+    location_code = user_data.get("location_code")
+
+    try:
+        cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)",
+                      (user_id, f"[{location_code}] bo'yicha: {comment_text}"))
+        conn.commit()
+        await message.reply("✅ Sizning javobingiz saqlandi. Rahmat!",
+                           reply_markup=get_user_keyboard(), protect_content=True)
+    except Exception as e:
+        logging.error(f"Foydalanuvchi kommentariyasini saqlashda xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
+
+    # Holatni tozalash
+    await state.clear()
 
 # 🔹 Foydalanuvchi rasm yuborsa
 @dp.message(lambda message: message.from_user.id != ADMIN_ID and message.photo)

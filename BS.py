@@ -156,7 +156,7 @@ async def process_full_name(message: Message, state: FSMContext):
 async def process_work_place(message: Message, state: FSMContext):
     await state.update_data(work_place=message.text)
     await message.reply("💼 Lavozimingizni yozing:", reply_markup=get_user_keyboard(), protect_content=True)
-    await  state.set_state(UserRegistration.position)
+    await state.set_state(UserRegistration.position)
 
 @dp.message(UserRegistration.position)
 async def process_position(message: Message, state: FSMContext):
@@ -445,7 +445,7 @@ async def process_callback(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.reply("❓ Nima maqsadda bordiz va nima o'zgartirdingiz? Javobingizni yozing:",
                                     reply_markup=get_user_keyboard(), protect_content=True)
         await state.set_state(UserCommentState.waiting_for_comment)
-        await state.update_data(location_code=location_code)
+        await state.update_data(location_code=location_code, has_commented=False)  # Kommentariya yozilmagan deb belgilaymiz
 
     elif callback.data == "search_location":
         await callback.message.reply("🔍 Yangi lokatsiya kodini yuboring (masalan, 3700):", reply_markup=get_user_keyboard(), protect_content=True)
@@ -463,9 +463,9 @@ async def process_callback(callback: types.CallbackQuery, state: FSMContext):
 @dp.message(UserCommentState.waiting_for_comment)
 async def process_user_comment(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    comment_text = message.text.strip()
     user_data = await state.get_data()
     location_code = user_data.get("location_code")
+    has_commented = user_data.get("has_commented", False)
 
     if not location_code:
         await message.reply("❌ Lokatsiya kodi topilmadi. Iltimos, qaytadan lokatsiya kodini yuboring.",
@@ -473,17 +473,25 @@ async def process_user_comment(message: Message, state: FSMContext):
         await state.clear()
         return
 
+    if has_commented:
+        await message.reply("❌ Siz allaqachon kommentariya yozdingiz. Yangi lokatsiya kodini yuboring (masalan, 3700):",
+                            reply_markup=get_user_keyboard(), protect_content=True)
+        await state.clear()
+        return
+
+    comment_text = message.text.strip()
     try:
         cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)",
                        (user_id, f"[{location_code}] bo'yicha: {comment_text}"))
         conn.commit()
-        await message.reply("✅ Sizning javobingiz saqlandi. Rahmat! Lokatsiya kodini yuborishingiz mumkin.",
+        await message.reply("✅ Sizning javobingiz saqlandi. Rahmat!\nYangi lokatsiya kodini yuboring (masalan, 3700):",
                             reply_markup=get_user_keyboard(), protect_content=True)
+        await state.update_data(has_commented=True)  # Kommentariya yozildi deb belgilaymiz
+        await state.clear()  # Holatni tozalaymiz va asosiy menyuga qaytamiz
     except Exception as e:
         logging.error(f"❌ Foydalanuvchi kommentariyasini saqlashda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
-
-    await state.clear()
+        await state.clear()
 
 # 🔍 Foydalanuvchi yangi lokatsiya kodi yuborishi
 @dp.message(UserSearchLocationState.waiting_for_location_code)

@@ -13,45 +13,45 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 import os
 
-# Logging sozlamalari
+# 📜 Logging sozlamalari
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# 🔑 Token va Admin ID
+# 🔑 Token va Admin ma'lumotlari
 TOKEN = "7400356855:AAH16xmEED2fc0NaaQH9XFEJuhqZn-D3nvY"  # Tokenni tekshiring!
 ADMIN_ID = 7865739071
 ADMIN_USERNAME = "@Mr_Beck07"
 
-# Webhook sozlamalari
+# 🌐 Webhook sozlamalari
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://bs-bot-production.up.railway.app{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
-WEBAPP_PORT = int(os.environ.get("PORT", 8080))
+WEBAPP_PORT = int(os.environ.get("PORT", 8080))  # Railway PORT muhit o‘zgaruvchisi
 
-# 📌 Botni ishga tushirish funksiyasi
+# 🤖 Botni ishga tushirish funksiyasi
 async def initialize_bot():
     global bot
     try:
-        logging.info("Botni ishga tushirish...")
+        logging.info("🤖 Botni ishga tushirish...")
         bot = Bot(
             token=TOKEN,
             default=DefaultBotProperties(parse_mode="HTML")
         )
         bot_info = await bot.get_me()
-        logging.info(f"Bot muvaffaqiyatli ulandi: @{bot_info.username}")
+        logging.info(f"✅ Bot muvaffaqiyatli ulandi: @{bot_info.username}")
         return bot
     except Exception as e:
-        logging.error(f"Botni ulashda xato: {str(e)}")
+        logging.error(f"❌ Botni ulashda xato: {str(e)}")
         raise Exception(f"Botni ishga tushirib bo‘lmadi: {str(e)}")
 
-# 📌 Dispatcher va storage
+# 📦 Dispatcher va storage
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# 📂 SQLite bazasini yaratish
+# 🗄️ SQLite bazasini yaratish
 conn = sqlite3.connect("database.db", check_same_thread=False)  # Thread-safe qilish uchun
 cursor = conn.cursor()
 
-# 📌 Jadval yaratish funksiyasi
+# 📋 Jadval yaratish funksiyasi
 def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -85,13 +85,13 @@ def init_db():
         cursor.execute("SELECT user_id FROM db_comments LIMIT 1")
     except sqlite3.OperationalError:
         cursor.execute("ALTER TABLE db_comments ADD COLUMN user_id INTEGER")
-        logging.info("user_id ustuni db_comments jadvaliga qo‘shildi.")
+        logging.info("📋 user_id ustuni db_comments jadvaliga qo‘shildi.")
     conn.commit()
 
-# Baza yaratishni ishga tushirish
+# 🗄️ Bazani ishga tushirish
 init_db()
 
-# 🔹 Holatlar
+# 🛠️ Holatlar (States)
 class UserRegistration(StatesGroup):
     full_name = State()
     work_place = State()
@@ -109,7 +109,7 @@ class AddLocationState(StatesGroup):
     waiting_for_additional_info = State()
     waiting_for_command = State()
 
-# 🔹 Inline tugmalar
+# 🎨 Inline tugmalar (Chiroyli ikonkalardan foydalanamiz)
 def get_user_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="ℹ️ Yordam", callback_data="help"),
@@ -119,12 +119,12 @@ def get_user_keyboard():
 def get_location_action_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📝 Kommentariya yozish", callback_data="write_comment"),
-         InlineKeyboardButton(text="🔍 BS lokatsiya qidirish", callback_data="search_location")],
+         InlineKeyboardButton(text="🔍 Lokatsiya qidirish", callback_data="search_location")],
         [InlineKeyboardButton(text="ℹ️ Yordam", callback_data="help"),
          InlineKeyboardButton(text="📞 Aloqa", callback_data="contact")]
     ])
 
-# 🔹 /start buyrug‘i
+# 🚀 /start buyrug‘i
 @dp.message(Command("start"))
 async def start_command(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -133,7 +133,7 @@ async def start_command(message: Message, state: FSMContext):
 
     if result:
         if result[0] == 1:
-            await message.reply("✅ Siz tasdiqlangansiz. Lokatsiya kodini yuboring (masalan, 3700):",
+            await message.reply("✅ Siz tasdiqlangansiz! Lokatsiya kodini yuboring (masalan, 3700):",
                                 reply_markup=get_user_keyboard(), protect_content=True)
         else:
             await message.reply("⏳ Ma'lumotlaringiz adminga yuborilgan. Admin ruxsatini kuting.",
@@ -145,7 +145,7 @@ async def start_command(message: Message, state: FSMContext):
                         reply_markup=get_user_keyboard(), protect_content=True)
     await state.set_state(UserRegistration.full_name)
 
-# 🔹 Ro‘yxatdan o‘tish jarayoni
+# 📝 Ro‘yxatdan o‘tish jarayoni
 @dp.message(UserRegistration.full_name)
 async def process_full_name(message: Message, state: FSMContext):
     await state.update_data(full_name=message.text)
@@ -184,26 +184,26 @@ async def process_position(message: Message, state: FSMContext):
                             reply_markup=get_user_keyboard(), protect_content=True)
         await state.clear()
     except Exception as e:
-        logging.error(f"Foydalanuvchi qo‘shishda xato: {str(e)}")
+        logging.error(f"❌ Foydalanuvchi qo‘shishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik: {str(e)}", protect_content=True)
 
-# 🔹 Admin buyruqlari
+# 🛠️ Admin buyruqlari
 @dp.message(Command("help"))
 async def help_command(message: Message):
     if message.from_user.id != ADMIN_ID:
         return await message.reply("❌ Bu buyruq faqat admin uchun!", protect_content=True)
-    await message.reply("🛠 Admin buyruqlari:\n"
-                        "✅ /approve id\n"
-                        "❌ /reject id\n"
-                        "⛔ /revoke id\n"
-                        "📋 /list_users\n"
-                        "📍 /add [kod nom] url\n"
-                        "🗑 /delete kod\n"
-                        "🌍 /list_locations\n"
-                        "🔄 /reset_add\n"
-                        "💬 /add_comment tekst\n"
-                        "📜 /view_comments\n"
-                        "ℹ️ /help", protect_content=True)
+    await message.reply("🛠️ Admin buyruqlari:\n"
+                        "✅ /approve id - Foydalanuvchini tasdiqlash\n"
+                        "❌ /reject id - Foydalanuvchini rad etish\n"
+                        "⛔ /revoke id - Foydalanuvchi ruxsatini bekor qilish\n"
+                        "📋 /list_users - Tasdiqlangan foydalanuvchilar ro‘yxati\n"
+                        "📍 /add [kod nom] url - Lokatsiya qo‘shish\n"
+                        "🗑️ /delete kod - Lokatsiyani o‘chirish\n"
+                        "🌍 /list_locations - Lokatsiyalar ro‘yxati\n"
+                        "🔄 /reset_add - Lokatsiya qo‘shishni qayta boshlash\n"
+                        "💬 /add_comment tekst - Kommentariya qo‘shish\n"
+                        "📜 /view_comments - Kommentariyalarni ko‘rish\n"
+                        "ℹ️ /help - Yordam", protect_content=True)
 
 @dp.message(Command("approve"))
 async def approve_user(message: Message):
@@ -221,7 +221,7 @@ async def approve_user(message: Message):
     except (IndexError, ValueError):
         await message.reply("❌ Format: /approve foydalanuvchi_id", protect_content=True)
     except Exception as e:
-        logging.error(f"Tasdiqlashda xato: {str(e)}")
+        logging.error(f"❌ Tasdiqlashda xato: {str(e)}")
         await message.reply(f"❌ Xatolik: {str(e)}", protect_content=True)
 
 @dp.message(Command("reject"))
@@ -240,7 +240,7 @@ async def reject_user(message: Message):
     except (IndexError, ValueError):
         await message.reply("❌ Format: /reject foydalanuvchi_id", protect_content=True)
     except Exception as e:
-        logging.error(f"Rad etishda xato: {str(e)}")
+        logging.error(f"❌ Rad etishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik: {str(e)}", protect_content=True)
 
 @dp.message(Command("revoke"))
@@ -259,7 +259,7 @@ async def revoke_user(message: Message):
     except (IndexError, ValueError):
         await message.reply("❌ Format: /revoke foydalanuvchi_id", protect_content=True)
     except Exception as e:
-        logging.error(f"Ruxsat bekor qilishda xato: {str(e)}")
+        logging.error(f"❌ Ruxsat bekor qilishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik: {str(e)}", protect_content=True)
 
 @dp.message(Command("list_users"))
@@ -319,7 +319,7 @@ async def view_comments(message: Message):
         response += f"🆔 {c[0]}\n👤 {full_name} (ID: {c[1]})\n💬 {c[2]}\n⏰ {c[3]}\n\n"
     await message.reply(response, protect_content=True)
 
-# 🔹 Lokatsiya qo‘shish jarayoni
+# 📍 Lokatsiya qo‘shish jarayoni
 @dp.message(Command("reset_add"))
 async def reset_add(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
@@ -387,9 +387,9 @@ async def delete_location(message: Message):
     code = parts[1].strip()
     cursor.execute("DELETE FROM locations WHERE code = ?", (code,))
     conn.commit()
-    await message.reply(f"🗑 [{code}] o‘chirildi.", protect_content=True)
+    await message.reply(f"🗑️ [{code}] o‘chirildi.", protect_content=True)
 
-# 🔹 Foydalanuvchi lokatsiya so‘rashi
+# 📍 Foydalanuvchi lokatsiya so‘rashi
 @dp.message()
 async def get_location(message: Message, state: FSMContext):
     if not message.text or message.text.startswith("/"):
@@ -418,10 +418,10 @@ async def get_location(message: Message, state: FSMContext):
     await bot.send_media_group(chat_id=user_id, media=media, protect_content=True)
     cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)", (user_id, f"{code} kodli lokatsiyani oldi"))
     conn.commit()
-    await message.reply("Yuqoridagi lokatsiya yuborildi. Tanlang:", reply_markup=get_location_action_keyboard(), protect_content=True)
+    await message.reply("📍 Yuqoridagi lokatsiya yuborildi. Tanlang:", reply_markup=get_location_action_keyboard(), protect_content=True)
     await state.update_data(location_code=code)
 
-# 🔹 Inline tugmalar bilan ishlash
+# 🎮 Inline tugmalar bilan ishlash
 @dp.callback_query()
 async def process_callback(callback: types.CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
@@ -440,7 +440,7 @@ async def process_callback(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.reply("❓ Nima maqsadda bordiz va nima o'zgartirdingiz? Javobingizni yozing:",
                                     reply_markup=get_user_keyboard(), protect_content=True)
         await state.set_state(UserCommentState.waiting_for_comment)
-        await state.update_data(location_code=location_code)  # Kodni holatda saqlash
+        await state.update_data(location_code=location_code)
 
     elif callback.data == "search_location":
         await callback.message.reply("🔍 Yangi lokatsiya kodini yuboring (masalan, 3700):", reply_markup=get_user_keyboard(), protect_content=True)
@@ -454,7 +454,7 @@ async def process_callback(callback: types.CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-# 🔹 Foydalanuvchi kommentariyasini qabul qilish
+# 💬 Foydalanuvchi kommentariyasini qabul qilish
 @dp.message(UserCommentState.waiting_for_comment)
 async def process_user_comment(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -475,34 +475,41 @@ async def process_user_comment(message: Message, state: FSMContext):
         await message.reply("✅ Sizning javobingiz saqlandi. Rahmat!",
                             reply_markup=get_user_keyboard(), protect_content=True)
     except Exception as e:
-        logging.error(f"Foydalanuvchi kommentariyasini saqlashda xato: {str(e)}")
+        logging.error(f"❌ Foydalanuvchi kommentariyasini saqlashda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
     await state.clear()
 
-# 🔹 Foydalanuvchi yangi lokatsiya kodi yuborishi
+# 🔍 Foydalanuvchi yangi lokatsiya kodi yuborishi
 @dp.message(UserSearchLocationState.waiting_for_location_code)
 async def process_search_location(message: Message, state: FSMContext):
-    await get_location(message, state)  # Takrorlanmaslik uchun umumiy funksiyadan foydalanamiz
+    await get_location(message, state)
     await state.clear()
 
-# 🔹 Foydalanuvchi rasm yuborsa
+# 📸 Foydalanuvchi rasm yuborsa
 @dp.message(lambda message: message.from_user.id != ADMIN_ID and message.photo)
 async def handle_user_photo(message: Message):
     await message.reply("❌ Faqat lokatsiya kodi yuborishingiz mumkin (masalan, 3700)!", reply_markup=get_user_keyboard(), protect_content=True)
 
-# 📌 Webhook sozlash
+# 🌐 Webhook sozlash
 async def on_startup():
-    await bot.set_webhook(WEBHOOK_URL)
-    logging.info(f"Webhook o‘rnatildi: {WEBHOOK_URL}")
+    try:
+        await bot.set_webhook(WEBHOOK_URL)
+        logging.info(f"✅ Webhook o‘rnatildi: {WEBHOOK_URL}")
+    except Exception as e:
+        logging.error(f"❌ Webhook o‘rnatishda xato: {str(e)}")
+        raise
 
 async def on_shutdown():
-    await bot.delete_webhook()
-    await bot.session.close()
-    conn.close()  # SQLite ulanishini yopamiz
-    logging.info("Bot o‘chirildi.")
+    try:
+        await bot.delete_webhook()
+        await bot.session.close()
+        conn.close()
+        logging.info("✅ Bot o‘chirildi.")
+    except Exception as e:
+        logging.error(f"❌ Botni o‘chirishda xato: {str(e)}")
 
-# 📌 Botni ishga tushirish
+# 🚀 Botni ishga tushirish
 async def main():
     global bot
     try:
@@ -513,10 +520,10 @@ async def main():
         setup_application(app, dp, bot=bot)
         dp.startup.register(on_startup)
         dp.shutdown.register(on_shutdown)
-        logging.info("Webhook server ishga tushdi...")
+        logging.info(f"🚀 Webhook server ishga tushdi. Port: {WEBAPP_PORT}")
         await web._run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
     except Exception as e:
-        logging.error(f"Ishga tushirishda xato: {str(e)}")
+        logging.error(f"❌ Ishga tushirishda xato: {str(e)}")
         raise
 
 if __name__ == "__main__":

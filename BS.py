@@ -76,15 +76,22 @@ cursor.execute("""
     )
 """)
 
-# 📌 Baza haqida kommentariyalar jadvali (user_id qo'shildi)
+# 📌 Baza haqida kommentariyalar jadvali
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS db_comments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
         comment TEXT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )
 """)
+
+# Check if user_id column exists in db_comments, and add it if it doesn't
+cursor.execute("PRAGMA table_info(db_comments)")
+columns = [col[1] for col in cursor.fetchall()]
+if 'user_id' not in columns:
+    cursor.execute("ALTER TABLE db_comments ADD COLUMN user_id INTEGER")
+    logging.info("Added user_id column to db_comments table.")
+
 conn.commit()
 
 # 🔹 Foydalanuvchi ma'lumotlarini so‘rash uchun holatlar
@@ -397,7 +404,7 @@ async def process_additional_info(message: Message, state: FSMContext):
     if additional_info.lower() == "yo'q":
         additional_info = None
     await state.update_data(additional_info=additional_info)
-    await message.reply("📝 Ma'lumot qabul qilindi. /add [kod nom] url yuboring.\nMasalan: /add [3700 Aktash] http://maps.google.com/maps?q=39.919719,65.929442",
+    await message.reply("📝 Ma'lumot  yuboring.\nMasalan: /add [3700 Aktash] http://maps.google.com/maps?q=39.919719,65.929442",
                         protect_content=True)
     await state.set_state(AddLocationState.waiting_for_command)
 

@@ -104,6 +104,10 @@ class UserRegistration(StatesGroup):
 class UserCommentState(StatesGroup):
     waiting_for_comment = State()
 
+# 🔹 Foydalanuvchi lokatsiya qidirish uchun holat
+class UserSearchLocationState(StatesGroup):
+    waiting_for_location_code = State()
+
 # 🔹 Admin lokatsiya qo‘shish uchun holatlar
 class AddLocationState(StatesGroup):
     waiting_for_first_photo = State()
@@ -119,6 +123,20 @@ def get_user_keyboard():
     ])
     return keyboard
 
+# 🔹 Lokatsiya yuborilganda chiqadigan inline tugmalar
+def get_location_action_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📝 Kommentariya yozish", callback_data="write_comment"),
+            InlineKeyboardButton(text="🔍 BS lokatsiya qidirish", callback_data="search_location")
+        ],
+        [
+            InlineKeyboardButton(text="ℹ️ Yordam", callback_data="help"),
+            InlineKeyboardButton(text="📞 Aloqa", callback_data="contact")
+        ]
+    ])
+    return keyboard
+
 # 🔹 /start buyrug‘i
 @dp.message(Command("start"))
 async def start_command(message: Message, state: FSMContext):
@@ -128,7 +146,8 @@ async def start_command(message: Message, state: FSMContext):
 
     if result:
         if result[0] == 1:
-            await message.reply("✅ Siz allaqachon tasdiqlangansiz. Tizimdan foydalanishingiz mumkin!",
+            await message.reply("✅ Siz allaqachon tasdiqlangansiz. Tizimdan foydalanishingiz mumkin!\n"
+                                "Lokatsiya kodini yuboring (masalan, 3700):",
                                 reply_markup=get_user_keyboard(), protect_content=True)
         else:
             await message.reply("⏳ Ma'lumotlaringiz adminga yuborilgan. Admin ruxsatini kuting.",
@@ -223,7 +242,8 @@ async def approve_user(message: Message):
         conn.commit()
 
         await message.reply(f"✅ Foydalanuvchi (🆔 {user_id}) tasdiqlandi.", protect_content=True)
-        await bot.send_message(user_id, "✅ Admin sizga ruxsat berdi. Endi tizimdan foydalanishingiz mumkin!",
+        await bot.send_message(user_id, "✅ Admin sizga ruxsat berdi. Endi tizimdan foydalanishingiz mumkin!\n"
+                                       "Lokatsiya kodini yuboring (masalan, 3700):",
                               reply_markup=get_user_keyboard(), protect_content=True)
     except Exception as e:
         logging.error(f"Tasdiqlashda xato: {str(e)}")
@@ -476,7 +496,7 @@ async def delete_location(message: Message):
         logging.error(f"O‘chirishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Foydalanuvchi lokatsiya so‘rashi va kommentariya qo‘shish (Tuzatilgan)
+# 🔹 Foydalanuvchi lokatsiya so‘rashi
 @dp.message()
 async def get_location(message: Message, state: FSMContext):
     if not message.text or message.text.startswith("/"):
@@ -514,17 +534,18 @@ async def get_location(message: Message, state: FSMContext):
                 types.InputMediaPhoto(media=photo2)
             ]
             await bot.send_media_group(chat_id=user_id, media=media, protect_content=True)
-            await message.reply("Yuqoridagi rasmlar bilan lokatsiya yuborildi.\n\n"
-                               "❓ Nima maqsadda bordiz va nima o'zgartirdingiz? Javobingizni yozing:",
-                               reply_markup=get_user_keyboard(), protect_content=True)
 
             # Avtomatik kommentariya qo'shish
             comment = f"Foydalanuvchi {code} kodli lokatsiyani oldi va tekshirdi"
             cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)", (user_id, comment))
             conn.commit()
 
-            # Foydalanuvchi javobini kutish uchun holatni o'rnatamiz
-            await state.set_state(UserCommentState.waiting_for_comment)
+            # Inline tugmalar bilan xabar yuborish
+            await message.reply("Yuqoridagi rasmlar bilan lokatsiya yuborildi.\n"
+                                "Quyidagi tugmalardan birini tanlang:",
+                                reply_markup=get_location_action_keyboard(), protect_content=True)
+
+            # Lokatsiya kodini saqlash
             await state.update_data(location_code=code)
         else:
             await message.reply("❌ Bunday kod topilmadi yoki hali qo‘shilmagan! Admin bilan bog‘laning.",
@@ -532,6 +553,49 @@ async def get_location(message: Message, state: FSMContext):
     except Exception as e:
         logging.error(f"So‘rovda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
+
+# 🔹 Inline tugmalar bilan ishlash
+@dp.callback_query()
+async def process_callback(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    cursor.execute("SELECT approved FROM users WHERE user_id = ?", (user_id,))
+    result = cursor.fetchone()
+
+    if not result or result[0] == 0:
+        await callback.message.reply("❌ Siz admin ruxsatini olmagansiz. ⏳ Tasdiqni kuting.",
+                                     reply_markup=get_user_keyboard(), protect_content=True)
+        await callback.answer()
+        return
+
+    if callback.data == "write_comment":
+        user_data = await state.get_data()
+        location_code = user_data.get("location_code")
+        if not location_code:
+            await callback.message.reply("❌ Avval lokatsiya kodini yuboring!",
+                                         reply_markup=get_user_keyboard(), protect_content=True)
+            await callback.answer()
+            return
+
+        await callback.message.reply("❓ Nima maqsadda bordiz va nima o'zgartirdingiz? Javobingizni yozing:",
+                                     reply_markup=get_user_keyboard(), protect_content=True)
+        await state.set_state(UserCommentState.waiting_for_comment)
+        await callback.answer()
+
+    elif callback.data == "search_location":
+        await callback.message.reply("🔍 Yangi lokatsiya kodini yuboring (masalan, 3700):",
+                                     reply_markup=get_user_keyboard(), protect_content=True)
+        await state.set_state(UserSearchLocationState.waiting_for_location_code)
+        await callback.answer()
+
+    elif callback.data == "help":
+        await callback.message.edit_text("ℹ️ Botdan foydalanish: Lokatsiya kodini yuboring (masalan, 3700).",
+                                         reply_markup=get_user_keyboard(), protect_content=True)
+        await callback.answer()
+
+    elif callback.data == "contact":
+        await callback.message.edit_text(f"📞 Aloqa: {ADMIN_USERNAME} ga yozing.",
+                                         reply_markup=get_user_keyboard(), protect_content=True)
+        await callback.answer()
 
 # 🔹 Foydalanuvchi kommentariyasini qabul qilish
 @dp.message(UserCommentState.waiting_for_comment)
@@ -554,22 +618,63 @@ async def process_user_comment(message: Message, state: FSMContext):
     # Holatni tozalash
     await state.clear()
 
+# 🔹 Foydalanuvchi yangi lokatsiya kodi yuborishi
+@dp.message(UserSearchLocationState.waiting_for_location_code)
+async def process_search_location(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    try:
+        # Kodni tozalash va faqat raqamlarni olish
+        code = message.text.strip()
+        # Agar kod faqat raqamlardan iborat bo‘lishini ta'minlash
+        if not code.isdigit():
+            await message.reply("❌ Kod faqat raqamlardan iborat bo‘lishi kerak (masalan, 3700)!",
+                                reply_markup=get_user_keyboard(), protect_content=True)
+            return
+
+        # Lokatsiyani qidirish
+        cursor.execute("SELECT name, latitude, longitude, photo1, photo2, additional_info FROM locations WHERE code = ?", (code,))
+        result = cursor.fetchone()
+
+        if result:
+            name, lat, lon, photo1, photo2, additional_info = result
+            map_url = f"http://maps.google.com/maps?q={lat},{lon}&z=16"
+            caption = f"📍 [{code} {name}]\n🌍 <a href='{map_url}'>Google xaritada ochish</a>"
+            if additional_info:
+                caption += f"\n📝 Qo'shimcha: {additional_info}"
+
+            media = [
+                types.InputMediaPhoto(media=photo1, caption=caption, parse_mode="HTML"),
+                types.InputMediaPhoto(media=photo2)
+            ]
+            await bot.send_media_group(chat_id=user_id, media=media, protect_content=True)
+
+            # Avtomatik kommentariya qo'shish
+            comment = f"Foydalanuvchi {code} kodli lokatsiyani oldi va tekshirdi"
+            cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)", (user_id, comment))
+            conn.commit()
+
+            # Inline tugmalar bilan xabar yuborish
+            await message.reply("Yuqoridagi rasmlar bilan lokatsiya yuborildi.\n"
+                                "Quyidagi tugmalardan birini tanlang:",
+                                reply_markup=get_location_action_keyboard(), protect_content=True)
+
+            # Lokatsiya kodini saqlash
+            await state.update_data(location_code=code)
+        else:
+            await message.reply("❌ Bunday kod topilmadi yoki hali qo‘shilmagan! Admin bilan bog‘laning.",
+                                reply_markup=get_user_keyboard(), protect_content=True)
+
+        # Holatni tozalash
+        await state.clear()
+    except Exception as e:
+        logging.error(f"Lokatsiya qidirishda xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
+
 # 🔹 Foydalanuvchi rasm yuborsa
 @dp.message(lambda message: message.from_user.id != ADMIN_ID and message.photo)
 async def handle_user_photo(message: Message):
     await message.reply("❌ Faqat lokatsiya kodi yuborishingiz mumkin (masalan, 3700). Rasm yuborish mumkin emas!",
                         reply_markup=get_user_keyboard(), protect_content=True)
-
-# 🔹 Inline tugmalar
-@dp.callback_query()
-async def process_callback(callback: types.CallbackQuery):
-    if callback.data == "help":
-        await callback.message.edit_text("ℹ️ Botdan foydalanish: Lokatsiya kodini yuboring (masalan, 3700).",
-                                         reply_markup=get_user_keyboard(), protect_content=True)
-    elif callback.data == "contact":
-        await callback.message.edit_text(f"📞 Aloqa: {ADMIN_USERNAME} ga yozing.",
-                                         reply_markup=get_user_keyboard(), protect_content=True)
-    await callback.answer()
 
 # 📌 Webhook sozlash
 async def on_startup():

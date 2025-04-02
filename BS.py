@@ -9,6 +9,9 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
+import os
 
 # Logging sozlamalari
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,21 +21,28 @@ TOKEN = "7400356855:AAH16xmEED2fc0NaaQH9XFEJuhqZn-D3nvY"
 ADMIN_ID = 7865739071  # Admin ID
 ADMIN_USERNAME = "@Mr_Beck07"  # Admin username
 
-# 📌 Botni ishga tushirish funksiyasi (faqat proxysiz)
+# Webhook sozlamalari
+WEBHOOK_PATH = "/webhook"
+# Railway URL'ingizni bu yerga qo'ying (masalan, https://bs-bot-production.up.railway.app)
+WEBHOOK_URL = f"https://avatars.githubusercontent.com/u/97296396?v=4{WEBHOOK_PATH}"
+WEBAPP_HOST = "0.0.0.0"
+WEBAPP_PORT = int(os.environ.get("PORT", 8080))  # Railway PORT ni o'qiydi
+
+# 📌 Botni ishga tushirish funksiyasi
 async def initialize_bot():
     global bot
     try:
-        logging.info("Proxysiz ulanishga urinish...")
+        logging.info("Botni ishga tushirish...")
         bot = Bot(
             token=TOKEN,
             default=DefaultBotProperties(parse_mode="HTML")
         )
         await bot.get_me()
-        logging.info("Bot proxysiz muvaffaqiyatli ulandi.")
+        logging.info("Bot muvaffaqiyatli ulandi.")
         return bot
     except Exception as e:
-        logging.error(f"Proxysiz ulanishda xato: {str(e)}")
-        raise Exception("Botni ishga tushirib bo‘lmadi: proxysiz ulanish muvaffaqiyatsiz.")
+        logging.error(f"Botni ulashda xato: {str(e)}")
+        raise Exception("Botni ishga tushirib bo‘lmadi.")
 
 # 📌 Dispatcher va storage
 storage = MemoryStorage()
@@ -171,7 +181,7 @@ async def help_command(message: Message):
                         "❌ /reject foydalanuvchi_id - Foydalanuvchini rad etish\n"
                         "⛔ /revoke foydalanuvchi_id - Foydalanuvchi ruxsatini bekor qilish\n"
                         "📋 /list_users - Tasdiqlangan foydalanuvchilar ro‘yxati\n"
-                        "📍 /add [kod nom] url - Lokatsiya qo‘shish (oldingi ikkita rasm va qo'shimcha ma'lumotdan so‘ng)\n"
+                        "📍 /add [kod nom] url - Lokatsiya qo‘shish (oldingi ikkita rasm  va qo'shimcha ma'lumotdan so‘ng)\n"
                         "🗑 /delete kod - Lokatsiya o‘chirish\n"
                         "🌍 /list_locations - Lokatsiyalar ro‘yxati\n"
                         "🔄 /reset_add - Lokatsiya qo‘shish jarayonini qayta boshlash\n"
@@ -491,27 +501,51 @@ async def handle_user_photo(message: Message):
 async def process_callback(callback: types.CallbackQuery):
     if callback.data == "help":
         await callback.message.edit_text("ℹ️ Botdan foydalanish: Lokatsiya kodini yuboring (masalan, 3700). "
-                                        "Admin tasdiqini kutayotgan bo‘lsangiz, kuting.",
-                                        reply_markup=get_user_keyboard(), protect_content=True)
+                                         "Admin tasdiqini kutayotgan bo‘lsangiz, kuting.",
+                                         reply_markup=get_user_keyboard(), protect_content=True)
     elif callback.data == "contact":
         await callback.message.edit_text(f"📞 Aloqa: Admin bilan bog‘lanish uchun {ADMIN_USERNAME} ga yozing.",
-                                        reply_markup=get_user_keyboard(), protect_content=True)
+                                         reply_markup=get_user_keyboard(), protect_content=True)
     await callback.answer()
+
+# 📌 Webhookni sozlash va botni ishga tushirish
+async def on_startup():
+    # Webhookni o'rnatish
+    await bot.set_webhook(WEBHOOK_URL)
+    logging.info(f"Webhook set to {WEBHOOK_URL}")
+
+async def on_shutdown():
+    # Webhookni o'chirish va resurslarni tozalash
+    await bot.delete_webhook()
+    await bot.session.close()
+    logging.info("Bot shutdown completed.")
 
 # 📌 Botni ishga tushirish
 async def main():
     global bot
-    while True:  # Qayta urinish uchun tsikl
-        try:
-            # Botni ishga tushiramiz (faqat proxysiz)
-            bot = await initialize_bot()
-            logging.info("Polling boshlandi...")
-            await dp.start_polling(bot)
-            break  # Agar muvaffaqiyatli ulansa, tsikl to'xtaydi
-        except Exception as e:
-            logging.error(f"Botni ishga tushirishda xato: {str(e)}")
-            await asyncio.sleep(5)  # 5 soniya kutib qayta urinish
+    try:
+        # Botni ishga tushiramiz
+        bot = await initialize_bot()
+
+        # Webhook serverni sozlash
+        app = web.Application()
+        webhook_requests_handler = SimpleRequestHandler(
+            dispatcher=dp,
+            bot=bot,
+            bot_settings=DefaultBotProperties(parse_mode="HTML")
+        )
+        webhook_requests_handler.register(app, path=WEBHOOK_PATH)
+        setup_application(app, dp, bot=bot)
+
+        # Startup va shutdown funksiyalarini qo'shish
+        dp.startup.register(on_startup)
+        dp.shutdown.register(on_shutdown)
+
+        logging.info("Starting webhook server...")
+        await web._run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
+    except Exception as e:
+        logging.error(f"Botni ishga tushirishda xato: {str(e)}")
+        raise
 
 if __name__ == "__main__":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     asyncio.run(main())

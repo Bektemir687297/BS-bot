@@ -63,7 +63,6 @@ cursor.execute("""
 """)
 
 # 📌 Lokatsiyalar jadvali
-cursor.execute("DROP TABLE IF EXISTS locations")
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS locations (
         code TEXT PRIMARY KEY,
@@ -85,6 +84,14 @@ cursor.execute("""
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )
 """)
+
+# user_id ustuni mavjudligini tekshirish va qo‘shish
+try:
+    cursor.execute("SELECT user_id FROM db_comments LIMIT 1")
+except sqlite3.OperationalError:
+    cursor.execute("ALTER TABLE db_comments ADD COLUMN user_id INTEGER")
+    logging.info("user_id ustuni db_comments jadvaliga qo‘shildi.")
+
 conn.commit()
 
 # 🔹 Foydalanuvchi ma'lumotlarini so‘rash uchun holatlar
@@ -222,7 +229,7 @@ async def approve_user(message: Message):
         logging.error(f"Tasdiqlashda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Admin rad etish
+# 🔹 Admin rad etish (foydalanuvchi qayta ro‘yxatdan o‘tishi uchun ma'lumotlarni o‘chirish)
 @dp.message(Command("reject"))
 async def reject_user(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -240,13 +247,13 @@ async def reject_user(message: Message):
         conn.commit()
 
         await message.reply(f"❌ Foydalanuvchi (🆔 {user_id}) rad etildi.", protect_content=True)
-        await bot.send_message(user_id, "❌ Admin sizning ro‘yxatingizni rad etdi. Qayta urinib ko‘rish uchun /start ni bosing.",
+        await bot.send_message(user_id, "❌ Admin sizning ro‘yxatingizni rad etdi. Qayta ro‘yxatdan o‘tish uchun /start buyrug‘ini bosing.",
                               reply_markup=get_user_keyboard(), protect_content=True)
     except Exception as e:
         logging.error(f"Rad etishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Admin ruxsatni bekor qilish
+# 🔹 Admin ruxsatni bekor qilish (foydalanuvchi qayta ro‘yxatdan o‘tishi uchun ma'lumotlarni o‘chirish)
 @dp.message(Command("revoke"))
 async def revoke_user(message: Message):
     if message.from_user.id != ADMIN_ID:
@@ -258,13 +265,13 @@ async def revoke_user(message: Message):
 
     try:
         user_id = int(command_parts[1])
-        cursor.execute("UPDATE users SET approved = 0 WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
         if cursor.rowcount == 0:
             return await message.reply("❌ Bunday foydalanuvchi topilmadi!", protect_content=True)
         conn.commit()
 
         await message.reply(f"⛔ Foydalanuvchi (🆔 {user_id}) ruxsati bekor qilindi.", protect_content=True)
-        await bot.send_message(user_id, "⛔ Admin sizning ruxsatingizni bekor qildi. Endi tizimdan foydalana olmaysiz.",
+        await bot.send_message(user_id, "⛔ Admin sizning ruxsatingizni bekor qildi. Qayta ro‘yxatdan o‘tish uchun /start buyrug‘ini bosing.",
                               reply_markup=get_user_keyboard(), protect_content=True)
     except Exception as e:
         logging.error(f"Ruxsatni bekor qilishda xato: {str(e)}")
@@ -509,7 +516,7 @@ async def get_location(message: Message, state: FSMContext):
             cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)", (user_id, comment))
             conn.commit()
 
-            # Foydalanuvchi javobini kutish uchun holatni o'rnatamiz
+            # Foydalanuvchi javobini kutish uchun holatni o rnatamiz
             await state.set_state(UserCommentState.waiting_for_comment)
             await state.update_data(location_code=code)
         else:

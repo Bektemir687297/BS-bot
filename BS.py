@@ -24,7 +24,7 @@ ADMIN_USERNAME = "@Mr_Beck07"  # Admin username
 # Webhook sozlamalari
 WEBHOOK_PATH = "/webhook"
 # Railway URL'ingizni bu yerga qo'ying (masalan, https://bs-bot-production.up.railway.app)
-WEBHOOK_URL = f"https://avatars.githubusercontent.com/u/97296396?v=4{WEBHOOK_PATH}"
+WEBHOOK_URL = f"https://bs-bot.up.railway.app/webhook{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.environ.get("PORT", 8080))  # Railway PORT ni o'qiydi
 

@@ -18,15 +18,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # 🔑 Token va Admin ID
 TOKEN = "7400356855:AAH16xmEED2fc0NaaQH9XFEJuhqZn-D3nvY"
-ADMIN_ID = 7865739071  # Admin ID
-ADMIN_USERNAME = "@Mr_Beck07"  # Admin username
+ADMIN_ID = 7865739071  # @Mr_Beck07 ning haqiqiy ID'sini bu yerga qo'ying (aniqlash uchun @userinfobot dan foydalaning)
+ADMIN_USERNAME = "@Mr_Beck07"
 
 # Webhook sozlamalari
 WEBHOOK_PATH = "/webhook"
-# Webhook URL'ni yangilash
-WEBHOOK_URL = f"https://bs-bot-production.up.railway.app/webhook"
+WEBHOOK_URL = f"https://bs-bot-production.up.railway.app{WEBHOOK_PATH}"  # Railway URL
 WEBAPP_HOST = "0.0.0.0"
-WEBAPP_PORT = int(os.environ.get("PORT", 8080))  # Railway PORT ni o'qiydi
+WEBAPP_PORT = int(os.environ.get("PORT", 8080))  # Railway PORT
 
 # 📌 Botni ishga tushirish funksiyasi
 async def initialize_bot():
@@ -63,7 +62,7 @@ cursor.execute("""
     )
 """)
 
-# 📌 Lokatsiyalar jadvali (qo'shimcha ma'lumotlar bilan)
+# 📌 Lokatsiyalar jadvali
 cursor.execute("DROP TABLE IF EXISTS locations")
 cursor.execute("""
     CREATE TABLE locations (
@@ -152,23 +151,27 @@ async def process_position(message: Message, state: FSMContext):
     work_place = user_data["work_place"]
     position = message.text
 
-    cursor.execute("INSERT OR REPLACE INTO users (user_id, full_name, work_place, position, approved) VALUES (?, ?, ?, ?, 0)",
-                   (user_id, full_name, work_place, position))
-    conn.commit()
+    try:
+        cursor.execute("INSERT OR REPLACE INTO users (user_id, full_name, work_place, position, approved) VALUES (?, ?, ?, ?, 0)",
+                       (user_id, full_name, work_place, position))
+        conn.commit()
 
-    await bot.send_message(ADMIN_ID, f"📋 Yangi foydalanuvchi ro‘yxatdan o‘tdi:\n"
-                                   f"🆔 ID: {user_id}\n"
-                                   f"👤 Familiya va ism: {full_name}\n"
-                                   f"🏢 Ish joyi: {work_place}\n"
-                                   f"💼 Lavozim: {position}\n\n"
-                                   f"✅ Tasdiqlash: /approve {user_id}\n"
-                                   f"❌ Rad etish: /reject {user_id}\n"
-                                   f"⛔ Ruxsatni bekor qilish: /revoke {user_id}",
-                                   protect_content=True)
+        await bot.send_message(ADMIN_ID, f"📋 Yangi foydalanuvchi ro‘yxatdan o‘tdi:\n"
+                                       f"🆔 ID: {user_id}\n"
+                                       f"👤 Familiya va ism: {full_name}\n"
+                                       f"🏢 Ish joyi: {work_place}\n"
+                                       f"💼 Lavozim: {position}\n\n"
+                                       f"✅ Tasdiqlash: /approve {user_id}\n"
+                                       f"❌ Rad etish: /reject {user_id}\n"
+                                       f"⛔ Ruxsatni bekor qilish: /revoke {user_id}",
+                                       protect_content=True)
 
-    await message.reply("✅ Ma'lumotlaringiz adminga yuborildi. ⏳ Admin ruxsatini kuting.",
-                        reply_markup=get_user_keyboard(), protect_content=True)
-    await state.clear()
+        await message.reply("✅ Ma'lumotlaringiz adminga yuborildi. ⏳ Admin ruxsatini kuting.",
+                            reply_markup=get_user_keyboard(), protect_content=True)
+        await state.clear()
+    except Exception as e:
+        logging.error(f"Foydalanuvchi qo‘shishda xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Admin yordam (imkoniyatlar ro‘yxati)
 @dp.message(Command("help"))
@@ -181,7 +184,7 @@ async def help_command(message: Message):
                         "❌ /reject foydalanuvchi_id - Foydalanuvchini rad etish\n"
                         "⛔ /revoke foydalanuvchi_id - Foydalanuvchi ruxsatini bekor qilish\n"
                         "📋 /list_users - Tasdiqlangan foydalanuvchilar ro‘yxati\n"
-                        "📍 /add [kod nom] url - Lokatsiya qo‘shish (oldingi ikkita rasm  va qo'shimcha ma'lumotdan so‘ng)\n"
+                        "📍 /add [kod nom] url - Lokatsiya qo‘shish (oldingi ikkita rasm va qo'shimcha ma'lumotdan so‘ng)\n"
                         "🗑 /delete kod - Lokatsiya o‘chirish\n"
                         "🌍 /list_locations - Lokatsiyalar ro‘yxati\n"
                         "🔄 /reset_add - Lokatsiya qo‘shish jarayonini qayta boshlash\n"
@@ -215,6 +218,7 @@ async def approve_user(message: Message):
         await message.reply("❌ Xato! Foydalanuvchi ID raqam bo‘lishi kerak.\nMasalan: /approve 12345",
                             protect_content=True)
     except Exception as e:
+        logging.error(f"Foydalanuvchi tasdiqlashda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Admin rad etish
@@ -243,6 +247,7 @@ async def reject_user(message: Message):
         await message.reply("❌ Xato! Foydalanuvchi ID raqam bo‘lishi kerak.\nMasalan: /reject 12345",
                             protect_content=True)
     except Exception as e:
+        logging.error(f"Foydalanuvchi rad etishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Admin ruxsatni bekor qilish
@@ -270,6 +275,7 @@ async def revoke_user(message: Message):
         await message.reply("❌ Xato! Foydalanuvchi ID raqam bo‘lishi kerak.\nMasalan: /revoke 12345",
                             protect_content=True)
     except Exception as e:
+        logging.error(f"Foydalanuvchi ruxsatini bekor qilishda xato: {str(e)}")
         await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Tasdiqlangan foydalanuvchilarni ro‘yxatini ko‘rish
@@ -278,41 +284,49 @@ async def list_users(message: Message):
     if message.from_user.id != ADMIN_ID:
         return await message.reply("❌ Sizda ushbu buyruqni bajarish huquqi yo‘q.", protect_content=True)
 
-    cursor.execute("SELECT user_id, full_name, work_place, position FROM users WHERE approved = 1")
-    users = cursor.fetchall()
+    try:
+        cursor.execute("SELECT user_id, full_name, work_place, position FROM users WHERE approved = 1")
+        users = cursor.fetchall()
 
-    if not users:
-        return await message.reply("📋 Tasdiqlangan foydalanuvchilar mavjud emas.", protect_content=True)
+        if not users:
+            return await message.reply("📋 Tasdiqlangan foydalanuvchilar mavjud emas.", protect_content=True)
 
-    response = f"📋 Tasdiqlangan foydalanuvchilar ro‘yxati ({len(users)} ta):\n\n"
-    for user in users:
-        user_id, full_name, work_place, position = user
-        response += f"🆔 ID: {user_id}\n👤 Familiya va ism: {full_name}\n🏢 Ish joyi: {work_place}\n💼 Lavozim: {position}\n\n"
+        response = f"📋 Tasdiqlangan foydalanuvchilar ro‘yxati ({len(users)} ta):\n\n"
+        for user in users:
+            user_id, full_name, work_place, position = user
+            response += f"🆔 ID: {user_id}\n👤 Familiya va ism: {full_name}\n🏢 Ish joyi: {work_place}\n💼 Lavozim: {position}\n\n"
 
-    await message.reply(response, protect_content=True)
+        await message.reply(response, protect_content=True)
+    except Exception as e:
+        logging.error(f"Foydalanuvchilar ro‘yxatini olishda xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-# 🔹 Lokatsiyalar ro‘yxatini ko‘rish (qo'shimcha ma'lumotlar bilan)
+# 🔹 Lokatsiyalar ro‘yxatini ko‘rish
 @dp.message(Command("list_locations"))
 async def list_locations(message: Message):
     if message.from_user.id != ADMIN_ID:
         return await message.reply("❌ Sizda ushbu buyruqni bajarish huquqi yo‘q.", protect_content=True)
 
-    cursor.execute("SELECT code, name, latitude, longitude, additional_info FROM locations")
-    locations = cursor.fetchall()
+    try:
+        cursor.execute("SELECT code, name, latitude, longitude, additional_info FROM locations")
+        locations = cursor.fetchall()
 
-    if not locations:
-        return await message.reply("🌍 Hozircha lokatsiyalar mavjud emas.", protect_content=True)
+        if not locations:
+            return await message.reply("🌍 Hozircha lokatsiyalar mavjud emas.", protect_content=True)
 
-    response = f"🌍 Lokatsiyalar ro‘yxati ({len(locations)} ta):\n\n"
-    for loc in locations:
-        code, name, lat, lon, additional_info = loc
-        map_url = f"http://maps.google.com/maps?q={lat},{lon}&z=16"
-        response += f"📍 Kod: {code}\n🏞 Nom: {name}\n🌐 Koordinatalar: {lat}, {lon}\n"
-        if additional_info:
-            response += f"📝 Qo'shimcha ma'lumot: {additional_info}\n"
-        response += f"<a href='{map_url}'>Xaritada</a>\n\n"
+        response = f"🌍 Lokatsiyalar ro‘yxati ({len(locations)} ta):\n\n"
+        for loc in locations:
+            code, name, lat, lon, additional_info = loc
+            map_url = f"http://maps.google.com/maps?q={lat},{lon}&z=16"
+            response += f"📍 Kod: {code}\n🏞 Nom: {name}\n🌐 Koordinatalar: {lat}, {lon}\n"
+            if additional_info:
+                response += f"📝 Qo'shimcha ma'lumot: {additional_info}\n"
+            response += f"<a href='{map_url}'>Xaritada</a>\n\n"
 
-    await message.reply(response, protect_content=True, disable_web_page_preview=True)
+        await message.reply(response, protect_content=True, disable_web_page_preview=True)
+    except Exception as e:
+        logging.error(f"Lokatsiyalarni olishda xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Baza haqida kommentariya qo‘shish
 @dp.message(Command("add_comment"))
@@ -325,11 +339,14 @@ async def add_comment(message: Message):
         return await message.reply("❌ Xato! Format: /add_comment komment\nMasalan: /add_comment Bu baza 2025-yilda yangilandi",
                                    protect_content=True)
 
-    comment = parts[1].strip()
-    cursor.execute("INSERT INTO db_comments (comment) VALUES (?)", (comment,))
-    conn.commit()
-
-    await message.reply(f"💬 Kommentariya qo‘shildi: {comment}", protect_content=True)
+    try:
+        comment = parts[1].strip()
+        cursor.execute("INSERT INTO db_comments (comment) VALUES (?)", (comment,))
+        conn.commit()
+        await message.reply(f"💬 Kommentariya qo‘shildi: {comment}", protect_content=True)
+    except Exception as e:
+        logging.error(f"Kommentariya qo‘shishda xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Baza haqidagi kommentariyalarni ko‘rish
 @dp.message(Command("view_comments"))
@@ -337,18 +354,22 @@ async def view_comments(message: Message):
     if message.from_user.id != ADMIN_ID:
         return await message.reply("❌ Sizda ushbu buyruqni bajarish huquqi yo‘q.", protect_content=True)
 
-    cursor.execute("SELECT id, comment, timestamp FROM db_comments ORDER BY timestamp DESC")
-    comments = cursor.fetchall()
+    try:
+        cursor.execute("SELECT id, comment, timestamp FROM db_comments ORDER BY timestamp DESC")
+        comments = cursor.fetchall()
 
-    if not comments:
-        return await message.reply("📜 Hozircha baza haqida kommentariyalar mavjud emas.", protect_content=True)
+        if not comments:
+            return await message.reply("📜 Hozircha baza haqida kommentariyalar mavjud emas.", protect_content=True)
 
-    response = f"📜 Baza haqidagi kommentariyalar ({len(comments)} ta):\n\n"
-    for comment in comments:
-        comment_id, text, timestamp = comment
-        response += f"🆔 ID: {comment_id}\n💬 Komment: {text}\n⏰ Vaqt: {timestamp}\n\n"
+        response = f"📜 Baza haqidagi kommentariyalar ({len(comments)} ta):\n\n"
+        for comment in comments:
+            comment_id, text, timestamp = comment
+            response += f"🆔 ID: {comment_id}\n💬 Komment: {text}\n⏰ Vaqt: {timestamp}\n\n"
 
-    await message.reply(response, protect_content=True)
+        await message.reply(response, protect_content=True)
+    except Exception as e:
+        logging.error(f"Kommentariyalarni ko‘rishda xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Admin lokatsiya qo‘shish jarayonini qayta boshlash
 @dp.message(Command("reset_add"))
@@ -397,7 +418,6 @@ async def add_location(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         return await message.reply("❌ Sizda ushbu buyruqni bajarish huquqi yo‘q.", protect_content=True)
 
-    # Holatni tekshirish
     current_state = await state.get_state()
     if current_state != AddLocationState.waiting_for_command.state:
         await message.reply("❌ Oldin ikkita rasm va qo'shimcha ma'lumotlarni yuboring! Birinchi rasmni yuborishdan boshlang.\n"
@@ -406,35 +426,38 @@ async def add_location(message: Message, state: FSMContext):
         await state.set_state(AddLocationState.waiting_for_first_photo)
         return
 
-    # Formatni tekshirish
     match = re.match(r"/add\s+\[(\d+)\s+(.+?)\]\s+(http://maps.google.com/maps\?q=(-?\d+\.\d+),(-?\d+\.\d+)[^\s]*)", message.text)
     if not match:
         await message.reply("❌ Xato! Format: /add [3700 Aktash] http://maps.google.com/maps?q=39.919719,65.929442",
                             protect_content=True)
         return
 
-    code, name, url, lat, lon = match.groups()
-    lat, lon = float(lat), float(lon)
-    user_data = await state.get_data()
+    try:
+        code, name, url, lat, lon = match.groups()
+        lat, lon = float(lat), float(lon)
+        user_data = await state.get_data()
 
-    photo1 = user_data.get("photo1")
-    photo2 = user_data.get("photo2")
-    additional_info = user_data.get("additional_info")
+        photo1 = user_data.get("photo1")
+        photo2 = user_data.get("photo2")
+        additional_info = user_data.get("additional_info")
 
-    if not photo1 or not photo2:
-        await message.reply("❌ Ikkita rasm yuborilmadi! Birinchi rasmni yuborishdan boshlang.\n"
-                            "Agar jarayonni qayta boshlamoqchi bo‘lsangiz, /reset_add buyrug‘ini ishlatishingiz mumkin.",
-                            protect_content=True)
-        await state.set_state(AddLocationState.waiting_for_first_photo)
-        return
+        if not photo1 or not photo2:
+            await message.reply("❌ Ikkita rasm yuborilmadi! Birinchi rasmni yuborishdan boshlang.\n"
+                                "Agar jarayonni qayta boshlamoqchi bo‘lsangiz, /reset_add buyrug‘ini ishlatishingiz mumkin.",
+                                protect_content=True)
+            await state.set_state(AddLocationState.waiting_for_first_photo)
+            return
 
-    cursor.execute("INSERT OR REPLACE INTO locations (code, name, latitude, longitude, photo1, photo2, additional_info) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                   (code, name, lat, lon, photo1, photo2, additional_info))
-    conn.commit()
+        cursor.execute("INSERT OR REPLACE INTO locations (code, name, latitude, longitude, photo1, photo2, additional_info) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       (code, name, lat, lon, photo1, photo2, additional_info))
+        conn.commit()
 
-    await message.reply(f"✅ [{code} {name}] lokatsiya qo‘shildi!\n📍 <a href='{url}'>Xaritada ko‘rish</a>",
-                        protect_content=True, disable_web_page_preview=True)
-    await state.clear()
+        await message.reply(f"✅ [{code} {name}] lokatsiya qo‘shildi!\n📍 <a href='{url}'>Xaritada ko‘rish</a>",
+                            protect_content=True, disable_web_page_preview=True)
+        await state.clear()
+    except Exception as e:
+        logging.error(f"Lokatsiya qo‘shishda xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Admin lokatsiya o‘chirish
 @dp.message(Command("delete"))
@@ -446,16 +469,18 @@ async def delete_location(message: Message):
     if len(parts) < 2:
         return await message.reply("❌ Xato! Format: /delete 3700", protect_content=True)
 
-    code = parts[1].strip()
-    cursor.execute("DELETE FROM locations WHERE code = ?", (code,))
-    conn.commit()
+    try:
+        code = parts[1].strip()
+        cursor.execute("DELETE FROM locations WHERE code = ?", (code,))
+        conn.commit()
+        await message.reply(f"🗑 [{code}] kodli joy o‘chirildi.", protect_content=True)
+    except Exception as e:
+        logging.error(f"Lokatsiya o‘chirishda xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
-    await message.reply(f"🗑 [{code}] kodli joy o‘chirildi.", protect_content=True)
-
-# 🔹 Foydalanuvchi lokatsiya so‘rashi (qo'shimcha ma'lumotlar bilan)
+# 🔹 Foydalanuvchi lokatsiya so‘rashi
 @dp.message()
 async def get_location(message: Message):
-    # Agar xabar matn bo‘lmasa yoki buyruq bo‘lsa, e'tiborsiz qoldirish
     if not message.text or message.text.startswith("/"):
         return
 
@@ -467,28 +492,31 @@ async def get_location(message: Message):
         return await message.reply("❌ Siz admin ruxsatini olmagansiz. ⏳ Iltimos, admin tasdiqini kuting.",
                                    reply_markup=get_user_keyboard(), protect_content=True)
 
-    code = message.text.strip()
-    cursor.execute("SELECT name, latitude, longitude, photo1, photo2, additional_info FROM locations WHERE code = ?", (code,))
-    result = cursor.fetchone()
+    try:
+        code = message.text.strip()
+        cursor.execute("SELECT name, latitude, longitude, photo1, photo2, additional_info FROM locations WHERE code = ?", (code,))
+        result = cursor.fetchone()
 
-    if result:
-        name, lat, lon, photo1, photo2, additional_info = result
-        map_url = f"http://maps.google.com/maps?q={lat},{lon}&z=16"
-        caption = f"📍 [{code} {name}]\n🌍 <a href='{map_url}'>Google xaritada ochish</a>"
-        if additional_info:
-            caption += f"\n📝 Qo'shimcha ma'lumot: {additional_info}"
+        if result:
+            name, lat, lon, photo1, photo2, additional_info = result
+            map_url = f"http://maps.google.com/maps?q={lat},{lon}&z=16"
+            caption = f"📍 [{code} {name}]\n🌍 <a href='{map_url}'>Google xaritada ochish</a>"
+            if additional_info:
+                caption += f"\n📝 Qo'shimcha ma'lumot: {additional_info}"
 
-        # Ikkita rasmni guruh sifatida yuborish (protect_content=True qo‘shildi)
-        media = [
-            types.InputMediaPhoto(media=photo1, caption=caption, parse_mode="HTML"),
-            types.InputMediaPhoto(media=photo2)
-        ]
-        await bot.send_media_group(chat_id=user_id, media=media, protect_content=True)
-        await message.reply("Yuqoridagi rasmlar bilan lokatsiya yuborildi.", reply_markup=get_user_keyboard(),
-                            protect_content=True)
-    else:
-        await message.reply("❌ Bunday bazaviy stansiya topilmadi yoki hali bazaga qo‘shilmagan!",
-                            reply_markup=get_user_keyboard(), protect_content=True)
+            media = [
+                types.InputMediaPhoto(media=photo1, caption=caption, parse_mode="HTML"),
+                types.InputMediaPhoto(media=photo2)
+            ]
+            await bot.send_media_group(chat_id=user_id, media=media, protect_content=True)
+            await message.reply("Yuqoridagi rasmlar bilan lokatsiya yuborildi.", reply_markup=get_user_keyboard(),
+                                protect_content=True)
+        else:
+            await message.reply("❌ Bunday bazaviy stansiya topilmadi yoki hali bazaga qo‘shilmagan!",
+                                reply_markup=get_user_keyboard(), protect_content=True)
+    except Exception as e:
+        logging.error(f"Lokatsiya so‘rovida xato: {str(e)}")
+        await message.reply(f"❌ Xatolik yuz berdi: {str(e)}", protect_content=True)
 
 # 🔹 Foydalanuvchi rasm yuborsa (admin bo‘lmagan foydalanuvchilar uchun)
 @dp.message(lambda message: message.from_user.id != ADMIN_ID and message.photo)
@@ -510,24 +538,26 @@ async def process_callback(callback: types.CallbackQuery):
 
 # 📌 Webhookni sozlash va botni ishga tushirish
 async def on_startup():
-    # Webhookni o'rnatish
-    await bot.set_webhook(WEBHOOK_URL)
-    logging.info(f"Webhook set to {WEBHOOK_URL}")
+    try:
+        await bot.set_webhook(WEBHOOK_URL)
+        logging.info(f"Webhook set to {WEBHOOK_URL}")
+    except Exception as e:
+        logging.error(f"Webhook o‘rnatishda xato: {str(e)}")
 
 async def on_shutdown():
-    # Webhookni o'chirish va resurslarni tozalash
-    await bot.delete_webhook()
-    await bot.session.close()
-    logging.info("Bot shutdown completed.")
+    try:
+        await bot.delete_webhook()
+        await bot.session.close()
+        logging.info("Bot shutdown completed.")
+    except Exception as e:
+        logging.error(f"Botni o‘chirishda xato: {str(e)}")
 
 # 📌 Botni ishga tushirish
 async def main():
     global bot
     try:
-        # Botni ishga tushiramiz
         bot = await initialize_bot()
 
-        # Webhook serverni sozlash
         app = web.Application()
         webhook_requests_handler = SimpleRequestHandler(
             dispatcher=dp,
@@ -537,7 +567,6 @@ async def main():
         webhook_requests_handler.register(app, path=WEBHOOK_PATH)
         setup_application(app, dp, bot=bot)
 
-        # Startup va shutdown funksiyalarini qo'shish
         dp.startup.register(on_startup)
         dp.shutdown.register(on_shutdown)
 

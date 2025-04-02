@@ -156,7 +156,7 @@ async def process_full_name(message: Message, state: FSMContext):
 async def process_work_place(message: Message, state: FSMContext):
     await state.update_data(work_place=message.text)
     await message.reply("💼 Lavozimingizni yozing:", reply_markup=get_user_keyboard(), protect_content=True)
-    await state.set_state(UserRegistration.position)
+    await  state.set_state(UserRegistration.position)
 
 @dp.message(UserRegistration.position)
 async def process_position(message: Message, state: FSMContext):
@@ -392,6 +392,11 @@ async def delete_location(message: Message):
 # 📍 Foydalanuvchi lokatsiya so‘rashi
 @dp.message()
 async def get_location(message: Message, state: FSMContext):
+    # Agar holat mavjud bo‘lsa, bu funksiya ishlamasligi kerak
+    current_state = await state.get_state()
+    if current_state is not None:
+        return  # Holat mavjud bo‘lsa, hech narsa qilmaymiz
+
     if not message.text or message.text.startswith("/"):
         return
     user_id = message.from_user.id
@@ -440,7 +445,7 @@ async def process_callback(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.reply("❓ Nima maqsadda bordiz va nima o'zgartirdingiz? Javobingizni yozing:",
                                     reply_markup=get_user_keyboard(), protect_content=True)
         await state.set_state(UserCommentState.waiting_for_comment)
-        await state.update_data(location_code=location_code)  # Har safar location_code ni yangilash
+        await state.update_data(location_code=location_code)
 
     elif callback.data == "search_location":
         await callback.message.reply("🔍 Yangi lokatsiya kodini yuboring (masalan, 3700):", reply_markup=get_user_keyboard(), protect_content=True)
@@ -472,7 +477,7 @@ async def process_user_comment(message: Message, state: FSMContext):
         cursor.execute("INSERT INTO db_comments (user_id, comment) VALUES (?, ?)",
                        (user_id, f"[{location_code}] bo'yicha: {comment_text}"))
         conn.commit()
-        await message.reply("✅ Sizning javobingiz saqlandi. Rahmat!",
+        await message.reply("✅ Sizning javobingiz saqlandi. Rahmat! Lokatsiya kodini yuborishingiz mumkin.",
                             reply_markup=get_user_keyboard(), protect_content=True)
     except Exception as e:
         logging.error(f"❌ Foydalanuvchi kommentariyasini saqlashda xato: {str(e)}")
